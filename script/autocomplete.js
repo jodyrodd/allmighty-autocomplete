@@ -81,6 +81,8 @@ app.directive('autocomplete', function() {
 
       $scope.preSelectOff = this.preSelectOff;
 
+      var timers = [];
+
       // selecting a suggestion with RIGHT ARROW or ENTER
       $scope.select = function(suggestion){
         if(suggestion){
@@ -91,19 +93,26 @@ app.directive('autocomplete', function() {
         }
         watching = false;
         $scope.completing = false;
-        setTimeout(function(){watching = true;},1000);
+        timers.push(setTimeout(function(){watching = true;},1000));
         $scope.setIndex(-1);
       };
 
+      $scope.$on("$destroy", function() {
+        while(timers.length > 0) {
+          var timer = timers.pop();
+          clearTimeout(timer);
+        }
+      });
 
     }],
     link: function(scope, element, attrs){
-        console.log(scope.noAutoSort)
+      
+      var timers = [];
 
-      setTimeout(function() {
+      timers.push(setTimeout(function() {
         scope.initLock = false;
         scope.$apply();
-      }, 250);
+      }, 250));
 
       var attr = '';
 
@@ -128,17 +137,17 @@ app.directive('autocomplete', function() {
       if (attrs.clickActivation) {
         element[0].onclick = function(e){
           if(!scope.searchParam){
-            setTimeout(function() {
+            timers.push(setTimeout(function() {
               scope.completing = true;
               scope.$apply();
-            }, 200);
+            }, 200));
           }
         };
       }
 
       var key = {left: 37, up: 38, right: 39, down: 40 , enter: 13, esc: 27, tab: 9};
 
-      document.addEventListener("keydown", function(e){
+      var docKeydownListener = function(e){
         var keycode = e.keyCode || e.which;
 
         switch (keycode){
@@ -149,19 +158,23 @@ app.directive('autocomplete', function() {
             scope.$apply();
             e.preventDefault();
         }
-      }, true);
+      };
 
-      document.addEventListener("blur", function(e){
+      document.addEventListener("keydown", docKeydownListener, true);
+
+      var docBlurListener = function(e){
         // disable suggestions on blur
         // we do a timeout to prevent hiding it before a click event is registered
-        setTimeout(function() {
+        timers.push(setTimeout(function() {
           scope.select();
           scope.setIndex(-1);
           scope.$apply();
-        }, 150);
-      }, true);
+        }, 150));
+      };
 
-      element[0].addEventListener("keydown",function (e){
+      document.addEventListener("blur", docBlurListener, true);
+
+      var elemKeydownListener = function (e){
         var keycode = e.keyCode || e.which;
 
         var l = angular.element(this).find('li').length;
@@ -240,6 +253,19 @@ app.directive('autocomplete', function() {
             return;
         }
 
+      };
+
+      element[0].addEventListener("keydown", elemKeydownListener);
+
+      element.on("$destroy", function() {
+        document.removeEventListener("keydown", docKeydownListener, true);
+        document.removeEventListener("blur", docBlurListener, true);
+        element[0].removeEventListener("keydown", elemKeydownListener);
+        docKeydownListener = docBlurListener = elemKeydownListener = null;
+        while(timers.length > 0) {
+          var timer = timers.pop();
+          clearTimeout(timer);
+        }
       });
     },
     template: '\
